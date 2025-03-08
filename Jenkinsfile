@@ -3,9 +3,6 @@ pipeline {
     environment {
         AWS_REGION = 'us-west-2' 
     }
-    tools {
-        dockerTool 'docker-tool'
-    }
     stages {
         stage ("Set AWS Credentials") {
             steps {
