@@ -4,11 +4,11 @@ pipeline {
         AWS_REGION = 'us-west-2' 
     }
     stages {
-        stage('Set AWS Credentials') {
+        stage ("Set AWS Credentials") {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-credential' 
+                    credentialsId: 'AWS' 
                 ]]) {
                     sh '''
                     echo "AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID"
@@ -17,23 +17,23 @@ pipeline {
                 }
             }
         }
-        stage('Checkout Code') {
+        stage ("Checkout Code") {
             steps {
-                git branch: 'main', url: 'https://github.com/aaron-dm-mcdonald/jenkins-ec2.git' 
+                git branch: 'main', url: 'https://github.com/Bassdanger/AWS-JenkinsRepo-S3.git' 
             }
         }
-        stage('Initialize Terraform') {
+        stage ("Initialize Terraform:") {
             steps {
                 sh '''
                 terraform init
                 '''
             }
         }
-        stage('Plan Terraform') {
+        stage ("Plan Terraform") {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-credential'
+                    credentialsId: 'AWS'
                 ]]) {
                     sh '''
                     export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
@@ -43,12 +43,12 @@ pipeline {
                 }
             }
         }
-        stage('Apply Terraform') {
+        stage ("Apply Terraform") {
             steps {
                 input message: "Approve Terraform Apply?", ok: "Deploy"
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-credential'
+                    credentialsId: 'AWS'
                 ]]) {
                     sh '''
                     export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
@@ -58,12 +58,28 @@ pipeline {
                 }
             }
         }
-        stage ('Destroy Terraform') {
+        stage ("Docker Pull Dastardly from Burp Suite container image") {
+            steps {
+                sh 'docker pull public.ecr.aws/portswigger/dastardly:latest'
+            }
+        }
+        stage ("Docker run Dastardly from Burp Suite Scan") {
+            steps {
+                cleanWs()
+                sh '''
+                    docker run --user $(id -u) -v ${WORKSPACE}:${WORKSPACE}:rw \
+                    -e BURP_START_URL=https://ginandjuice.shop/ \
+                    -e BURP_REPORT_FILE_PATH=${WORKSPACE}/dastardly-report.xml \
+                    public.ecr.aws/portswigger/dastardly:latest
+                '''
+            }
+        }
+        stage ("Destroy Terraform") {
             steps {
                 input message: "Do you want to destroy the infrastructure?", ok: "Destroy"
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-credential'
+                    credentialsId: 'AWS'
                 ]]) {
                     sh '''
                     export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
@@ -80,6 +96,9 @@ pipeline {
         }
         failure {
             echo 'Terraform deployment failed!'
+        }
+        always {
+            junit testResults: 'dastardly-report.xml', skipPublishingChecks: true
         }
     }
 }
