@@ -3,6 +3,9 @@ pipeline {
     environment {
         AWS_REGION = 'us-west-2' 
     }
+    tools {
+        dockerTool 'docker-tool'
+    }
     stages {
         stage ("Set AWS Credentials") {
             steps {
@@ -91,14 +94,14 @@ pipeline {
         }
     }
     post {
+        always {
+            junit testResults: 'dastardly-report.xml', skipPublishingChecks: true
+        }
         success {
             echo 'Terraform deployment completed successfully!'
         }
         failure {
             echo 'Terraform deployment failed!'
-        }
-        always {
-            junit testResults: 'dastardly-report.xml', skipPublishingChecks: true
         }
     }
 }
